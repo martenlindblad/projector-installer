@@ -4,6 +4,8 @@
 
 
 """User dialog related procedures."""
+import platform
+import subprocess
 import sys
 import readline
 from getpass import getpass
@@ -20,6 +22,17 @@ from .utils import get_local_addresses, get_distributive_name
 from .products import get_compatible_apps, IDEKind, Product, get_all_apps
 
 DEF_PROJECTOR_PORT: int = 9999
+
+def runcommand (cmd):
+    """ Executes an external command in the shell and returns 3 values:
+    exit code of the command, its standard output and its error output."""
+    proc = subprocess.Popen(cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            shell=True,
+                            universal_newlines=True)
+    std_out, std_err = proc.communicate()
+    return proc.returncode, std_out, std_err
 
 
 def get_compatible_app_names(kind: IDEKind, pattern: Optional[str] = None) -> List[Product]:
@@ -293,7 +306,7 @@ def select_app_path() -> Optional[str]:
     return None
 
 
-def get_all_listening_ports() -> List[int]:
+def get_all_listening_ports_linux() -> List[int]:
     """
     Returns all tcp port numbers in LISTEN state (on any address).
     Reads port state from /proc/net/tcp.
@@ -314,6 +327,28 @@ def get_all_listening_ports() -> List[int]:
             pass
 
     return res
+
+
+def get_all_listening_ports_freebsd() -> List[int]:
+    """
+    Returns all tcp port numbers in LISTEN state (on any address).
+    Reads port state from sockstat -P tcp -l.
+    """
+    _, out, _ = runcommand("sockstat -P tcp -l")
+    records = out.split('\n')[1:-1]
+    ports = [x.split()[5].split(':')[1] for x in records]
+    res = [int(x) for x in ports]
+    return res
+
+
+def get_all_listening_ports() -> List[int]:
+    """
+    Returns all tcp port numbers in LISTEN state (on any address).
+    """
+    if platform.system() == 'Linux':
+        return get_all_listening_ports_linux()
+    if platform.system() == 'FreeBSD':
+        return get_all_listening_ports_freebsd()
 
 
 def is_open_port(port: int) -> bool:
